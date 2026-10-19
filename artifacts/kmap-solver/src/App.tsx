@@ -2,17 +2,20 @@ import { useState } from 'react';
 import { Braces, ChevronDown, CircleHelp, Command, Dot, Sigma } from 'lucide-react';
 
 const INPUT_MODES = ['Truth Table', 'Minterms', 'Maxterms', 'Boolean Expression'] as const;
+const DEFAULT_VARIABLE_NAMES = ['A', 'B', 'C', 'D', 'E'];
 
 function App() {
   const [variableCount, setVariableCount] = useState(4);
-  const [variableNames, setVariableNames] = useState(['A', 'B', 'C', 'D', 'E']);
+  const [variableNamesInput, setVariableNamesInput] = useState(DEFAULT_VARIABLE_NAMES.join(', '));
   const [inputMode, setInputMode] = useState<(typeof INPUT_MODES)[number]>('Minterms');
   const [values, setValues] = useState('');
   const [dontCares, setDontCares] = useState('');
 
-  function updateVariableName(index: number, value: string) {
-    setVariableNames((current) => current.map((name, i) => i === index ? value : name));
-  }
+  const parsedVariableNames = variableNamesInput.split(',').map((name) => name.trim());
+  const activeVariableNames = Array.from(
+    { length: variableCount },
+    (_, index) => parsedVariableNames[index] || DEFAULT_VARIABLE_NAMES[index],
+  );
 
   return (
     <main className="min-h-[100dvh] bg-[#f5f2e9] text-[#263440]">
@@ -86,26 +89,22 @@ function App() {
 
               <div>
                 <div className="mb-2 flex items-baseline justify-between">
-                  <label className="text-[12px] font-semibold text-[#4f5d60]">Variable names</label>
+                  <label htmlFor="variable-names" className="text-[12px] font-semibold text-[#4f5d60]">Variable names</label>
                   <span className="mono text-[10px] text-[#9a9e97]">{variableCount} active</span>
                 </div>
-                <div className="grid grid-cols-5 gap-2">
-                  {variableNames.slice(0, variableCount).map((name, index) => (
-                    <label className="min-w-0" key={index}>
-                      <span className="sr-only">Variable {index + 1} name</span>
-                      <input
-                        aria-label={`Variable ${index + 1} name`}
-                        value={name}
-                        onChange={(event) => updateVariableName(index, event.target.value)}
-                        maxLength={12}
-                        className="h-10 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-2 text-center text-[13px] font-semibold text-[#2e4a4a] outline-none transition placeholder:text-[#adb2aa] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
-                        data-testid={`input-variable-name-${index + 1}`}
-                      />
-                    </label>
-                  ))}
-                </div>
+                <input
+                  id="variable-names"
+                  type="text"
+                  value={variableNamesInput}
+                  onChange={(event) => setVariableNamesInput(event.target.value)}
+                  placeholder="x, y, z"
+                  autoComplete="off"
+                  className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                  data-testid="input-variable-names"
+                />
+                <p className="mt-1.5 text-[10px] text-[#9a9e97]">Separate names with commas.</p>
                 <p className="mt-2 text-[11px] text-[#89918c]" data-testid="text-active-variable-names">
-                  Active: {variableNames.slice(0, variableCount).map((name) => name || '—').join(', ')}
+                  Active: {activeVariableNames.join(', ')}
                 </p>
               </div>
 
