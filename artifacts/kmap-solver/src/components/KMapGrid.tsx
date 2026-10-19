@@ -30,6 +30,12 @@ type GroupLoop = {
   y: number;
   width: number;
   height: number;
+  openEdges: {
+    top: boolean;
+    right: boolean;
+    bottom: boolean;
+    left: boolean;
+  };
 };
 
 const GRAY_CODE_VALUES: Record<number, number[]> = {
@@ -99,6 +105,53 @@ function patternCoversMinterm(pattern: string, minterm: number, variableCount: n
   return [...pattern].every((bit, index) => bit === '-' || bit === bits[index]);
 }
 
+function createOpenLoopPath(loop: GroupLoop): string {
+  const { x, y, width, height, openEdges } = loop;
+  const radius = Math.min(15, width / 2, height / 2);
+  const right = x + width;
+  const bottom = y + height;
+  const paths: string[] = [];
+
+  if (!openEdges.top) {
+    const endX = openEdges.right ? right : right - radius;
+    let path = `M ${x} ${openEdges.left ? y : y + radius}`;
+    if (!openEdges.left) {
+      path += ` Q ${x} ${y} ${x + radius} ${y}`;
+    }
+    path += ` L ${endX} ${y}`;
+    if (!openEdges.right) {
+      path += ` Q ${right} ${y} ${right} ${y + radius}`;
+    }
+    paths.push(path);
+  }
+
+  if (!openEdges.bottom) {
+    let path = `M ${right} ${openEdges.right ? bottom : bottom - radius}`;
+    if (!openEdges.right) {
+      path += ` Q ${right} ${bottom} ${right - radius} ${bottom}`;
+    }
+    path += ` L ${openEdges.left ? x : x + radius} ${bottom}`;
+    if (!openEdges.left) {
+      path += ` Q ${x} ${bottom} ${x} ${bottom - radius}`;
+    }
+    paths.push(path);
+  }
+
+  if (!openEdges.right) {
+    const startY = openEdges.top ? y : y + radius;
+    const endY = openEdges.bottom ? bottom : bottom - radius;
+    paths.push(`M ${right} ${startY} L ${right} ${endY}`);
+  }
+
+  if (!openEdges.left) {
+    const startY = openEdges.bottom ? bottom : bottom - radius;
+    const endY = openEdges.top ? y : y + radius;
+    paths.push(`M ${x} ${startY} L ${x} ${endY}`);
+  }
+
+  return paths.join(' ');
+}
+
 function getGroupLoops(
   patterns: string[],
   cells: CellCoordinate[],
@@ -114,6 +167,10 @@ function getGroupLoops(
     );
     const rows = getContiguousSegments(coveredCells.map((cell) => cell.row));
     const columns = getContiguousSegments(coveredCells.map((cell) => cell.column));
+    const wrapsRows = rows.length > 1 && rows[0].start === 0 && rows.at(-1)?.end === rowCount - 1;
+    const wrapsColumns = columns.length > 1
+      && columns[0].start === 0
+      && columns.at(-1)?.end === columnCount - 1;
 
     rows.forEach((row) => {
       columns.forEach((column) => {
@@ -123,6 +180,12 @@ function getGroupLoops(
           y: row.start * 100 + 2,
           width: (column.end - column.start + 1) * 100 - 4,
           height: (row.end - row.start + 1) * 100 - 4,
+          openEdges: {
+            top: wrapsRows && row.start === 0,
+            right: wrapsColumns && column.end === columnCount - 1,
+            bottom: wrapsRows && row.end === rowCount - 1,
+            left: wrapsColumns && column.start === 0,
+          },
         });
       });
     });
@@ -351,21 +414,40 @@ function MapPanel({
               aria-hidden="true"
               data-testid={`overlay-kmap-groups-${panel.key}`}
             >
-              {groupLoops.map((loop) => (
-                <rect
-                  key={loop.key}
-                  x={loop.x}
-                  y={loop.y}
-                  width={loop.width}
-                  height={loop.height}
-                  rx="15"
-                  fill="none"
-                  stroke="#3159e8"
-                  strokeWidth="2"
-                  vectorEffect="non-scaling-stroke"
-                  data-testid={`outline-kmap-group-${panel.key}-${loop.key}`}
-                />
-              ))}
+              {groupLoops.map((loop) => {
+                const isOpenEnded = Object.values(loop.openEdges).some(Boolean);
+                if (isOpenEnded) {
+                  return (
+                    <path
+                      key={loop.key}
+                      d={createOpenLoopPath(loop)}
+                      fill="none"
+                      stroke="#21875a"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                      data-testid={`outline-kmap-group-${panel.key}-${loop.key}`}
+                    />
+                  );
+                }
+
+                return (
+                  <rect
+                    key={loop.key}
+                    x={loop.x}
+                    y={loop.y}
+                    width={loop.width}
+                    height={loop.height}
+                    rx="15"
+                    fill="none"
+                    stroke="#21875a"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                    data-testid={`outline-kmap-group-${panel.key}-${loop.key}`}
+                  />
+                );
+              })}
             </svg>
           </div>
 

@@ -78,7 +78,7 @@ function App() {
       });
       return {
         cellValues,
-        groupPatterns: result.selectedPrimeImplicants.map((implicant) => implicant.pattern),
+        groupPatterns: result.essentialPrimeImplicants.map((implicant) => implicant.pattern),
         error: null,
       };
     } catch (cause) {
