@@ -197,43 +197,6 @@ function getGroupLoops(
   return loops;
 }
 
-function HorizontalBracket({ label, position }: { label: string; position: 'top' | 'bottom' }) {
-  const top = position === 'top';
-
-  return (
-    <div className="relative h-full min-w-0" aria-hidden="true">
-      <span className={`absolute inset-x-0 z-10 text-center font-mono text-[9px] leading-none text-[#b0b0b0] ${top ? 'top-0' : 'bottom-0'}`}>
-        {label}
-      </span>
-      <svg
-        className={`absolute inset-x-1 h-[7px] w-[calc(100%-8px)] text-[#c8c8c8] ${top ? 'bottom-0' : 'top-0'}`}
-        viewBox="0 0 100 8"
-        preserveAspectRatio="none"
-      >
-        <path
-          d={top ? 'M1 7V3H99V7' : 'M1 1V5H99V1'}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1"
-        />
-      </svg>
-    </div>
-  );
-}
-
-function RowBracket({ label }: { label: string }) {
-  return (
-    <div className="relative h-full" aria-hidden="true">
-      <span className="absolute left-0 top-1/2 -translate-y-1/2 font-mono text-[9px] leading-none text-[#b0b0b0]">
-        {label}
-      </span>
-      <svg className="absolute right-0 top-0 h-full w-[11px] text-[#c8c8c8]" viewBox="0 0 11 100" preserveAspectRatio="none">
-        <path d="M10 1H4V99H10" fill="none" stroke="currentColor" strokeWidth="1" />
-      </svg>
-    </div>
-  );
-}
-
 function MapPanel({
   panel,
   variableCount,
@@ -271,29 +234,13 @@ function MapPanel({
     columnCodes.length,
     variableCount,
   );
-  const isThreeVariableMap = variableCount === 3;
-  const topBracketColumns = isThreeVariableMap
-    ? columnCodes.map((code, index) => ({ index, bits: toBits(code, columnWidth) }))
-        .filter(({ bits }) => bits[0] === '1')
-        .map(({ index }) => index)
-    : [];
-  const bottomBracketColumns = isThreeVariableMap
-    ? columnCodes.map((code, index) => ({ index, bits: toBits(code, columnWidth) }))
-        .filter(({ bits }) => bits[1] === '1')
-        .map(({ index }) => index)
-    : [];
-  const rowBracketIndex = isThreeVariableMap
-    ? rowCodes.findIndex((code) => toBits(code, rowWidth) === '1')
-    : -1;
-  const topBracketSegments = getContiguousSegments(topBracketColumns);
-  const bottomBracketSegments = getContiguousSegments(bottomBracketColumns);
   const mapWidth = variableCount === 2
     ? 'min-w-[190px] max-w-[190px]'
     : 'min-w-[300px] max-w-[340px]';
-  const layoutColumns = `28px 28px repeat(${columnCodes.length}, minmax(0, 1fr))`;
-  const layoutRows = `18px 24px repeat(${rowCodes.length}, 58px) 20px`;
-  const cellColumnStart = 3;
-  const cellRowStart = 3;
+  const layoutColumns = `42px repeat(${columnCodes.length}, minmax(0, 1fr))`;
+  const layoutRows = `24px repeat(${rowCodes.length}, 58px)`;
+  const cellColumnStart = 2;
+  const cellRowStart = 2;
   const cornerRowBits = rowVariables.join('');
   const cornerColumnBits = columnVariables.join('');
 
@@ -308,7 +255,7 @@ function MapPanel({
         <div className="grid w-full text-black" style={{ gridTemplateColumns: layoutColumns, gridTemplateRows: layoutRows }}>
           <div
             className="relative"
-            style={{ gridColumn: '1 / span 2', gridRow: '1 / span 2' }}
+            style={{ gridColumn: 1, gridRow: 1 }}
             data-testid={`cell-kmap-corner-${panel.key}`}
           >
             <span className="absolute right-0 top-0 font-mono text-[11px] leading-none text-black">
@@ -317,29 +264,17 @@ function MapPanel({
             <span className="absolute bottom-0 left-0 font-mono text-[11px] leading-none text-black">
               {cornerRowBits}
             </span>
-            <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 56 42" preserveAspectRatio="none" aria-hidden="true">
-              <line x1="26" y1="12" x2="56" y2="42" stroke="#111111" strokeWidth="1" />
+            <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 42 24" preserveAspectRatio="none" aria-hidden="true">
+              <line x1="17" y1="1" x2="42" y2="24" stroke="#111111" strokeWidth="1" />
             </svg>
             <span className="sr-only">{cornerRowBits} \ {cornerColumnBits}</span>
           </div>
-
-          {isThreeVariableMap && topBracketSegments.map((segment) => (
-            <div
-              key={`top-${segment.start}`}
-              style={{
-                gridRow: 1,
-                gridColumn: `${cellColumnStart + segment.start} / span ${segment.end - segment.start + 1}`,
-              }}
-            >
-              <HorizontalBracket label={columnVariables[0]} position="top" />
-            </div>
-          ))}
 
           {columnCodes.map((code, index) => (
             <div
               key={code}
               className="flex items-end justify-center pb-0.5 font-mono text-[10px] leading-none text-[#333]"
-              style={{ gridRow: 2, gridColumn: cellColumnStart + index }}
+              style={{ gridRow: 1, gridColumn: cellColumnStart + index }}
               data-testid={`text-kmap-column-${panel.key}-${toBits(code, columnWidth)}`}
             >
               {toBits(code, columnWidth)}
@@ -349,22 +284,13 @@ function MapPanel({
           {rowCodes.map((code, rowIndex) => (
             <div
               key={code}
-              className="flex items-center justify-center font-mono text-[10px] leading-none text-[#333]"
-              style={{ gridRow: cellRowStart + rowIndex, gridColumn: 2 }}
+              className="flex items-center justify-end pr-2 font-mono text-[10px] leading-none text-[#333]"
+              style={{ gridRow: cellRowStart + rowIndex, gridColumn: 1 }}
               data-testid={`text-kmap-row-${panel.key}-${toBits(code, rowWidth)}`}
             >
               {toBits(code, rowWidth)}
             </div>
           ))}
-
-          {isThreeVariableMap && rowBracketIndex >= 0 && (
-            <div
-              style={{ gridRow: cellRowStart + rowBracketIndex, gridColumn: 1 }}
-              data-testid={`bracket-kmap-row-${panel.key}`}
-            >
-              <RowBracket label={rowVariables[0]} />
-            </div>
-          )}
 
           <div
             className="relative grid overflow-visible"
@@ -450,18 +376,6 @@ function MapPanel({
               })}
             </svg>
           </div>
-
-          {isThreeVariableMap && bottomBracketSegments.map((segment) => (
-            <div
-              key={`bottom-${segment.start}`}
-              style={{
-                gridRow: cellRowStart + rowCodes.length,
-                gridColumn: `${cellColumnStart + segment.start} / span ${segment.end - segment.start + 1}`,
-              }}
-            >
-              <HorizontalBracket label={columnVariables[1]} position="bottom" />
-            </div>
-          ))}
         </div>
       </div>
     </section>
