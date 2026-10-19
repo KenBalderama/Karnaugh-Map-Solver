@@ -1,22 +1,94 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Braces, ChevronDown, CircleHelp, Dot, Sigma } from 'lucide-react';
 import { KMapGrid } from './components/KMapGrid';
+import { simplifyBooleanFunction } from './lib/boolean-simplifier';
 
 const INPUT_MODES = ['Truth Table', 'Minterms', 'Maxterms', 'Boolean Expression'] as const;
 const DEFAULT_VARIABLE_NAMES = ['A', 'B', 'C', 'D', 'E'];
 
+function parseMintermList(input: string, label: string): { minterms: number[]; error: string | null } {
+  if (!input.trim()) {
+    return { minterms: [], error: null };
+  }
+
+  const tokens = input.split(',');
+  if (tokens.at(-1)?.trim() === '') {
+    tokens.pop();
+  }
+  const trimmedTokens = tokens.map((token) => token.trim());
+
+  if (trimmedTokens.some((token) => token.length === 0)) {
+    return { minterms: [], error: `Use commas between ${label} indices.` };
+  }
+  if (trimmedTokens.some((token) => !/^\d+$/.test(token))) {
+    return { minterms: [], error: `${label} must be comma-separated decimal indices.` };
+  }
+
+  return {
+    minterms: [...new Set(trimmedTokens.map(Number))],
+    error: null,
+  };
+}
+
 function App() {
-  const [variableCount, setVariableCount] = useState(4);
+  const [variableCount, setVariableCount] = useState(3);
   const [variableNamesInput, setVariableNamesInput] = useState(DEFAULT_VARIABLE_NAMES.join(', '));
   const [inputMode, setInputMode] = useState<(typeof INPUT_MODES)[number]>('Minterms');
   const [values, setValues] = useState('');
   const [dontCares, setDontCares] = useState('');
 
-  const parsedVariableNames = variableNamesInput.split(',').map((name) => name.trim());
-  const activeVariableNames = Array.from(
-    { length: variableCount },
-    (_, index) => parsedVariableNames[index] || DEFAULT_VARIABLE_NAMES[index],
-  );
+  const activeVariableNames = useMemo(() => {
+    const parsedVariableNames = variableNamesInput.split(',').map((name) => name.trim());
+    return Array.from(
+      { length: variableCount },
+      (_, index) => parsedVariableNames[index] || DEFAULT_VARIABLE_NAMES[index],
+    );
+  }, [variableCount, variableNamesInput]);
+
+  const mapDisplayData = useMemo(() => {
+    if (inputMode !== 'Minterms') {
+      return { cellValues: {}, groupPatterns: [], error: null };
+    }
+
+    const parsedMinterms = parseMintermList(values, 'Minterm');
+    const parsedDontCares = parseMintermList(dontCares, 'Don’t-care');
+    const error = parsedMinterms.error ?? parsedDontCares.error;
+    if (error) {
+      return { cellValues: {}, groupPatterns: [], error };
+    }
+
+    const cellValues: Record<number, '1' | 'X'> = {};
+    parsedMinterms.minterms.forEach((minterm) => {
+      cellValues[minterm] = '1';
+    });
+    parsedDontCares.minterms.forEach((minterm) => {
+      cellValues[minterm] = 'X';
+    });
+
+    if (parsedMinterms.minterms.length === 0 && parsedDontCares.minterms.length === 0) {
+      return { cellValues, groupPatterns: [], error: null };
+    }
+
+    try {
+      const result = simplifyBooleanFunction({
+        variableCount,
+        minterms: parsedMinterms.minterms,
+        dontCares: parsedDontCares.minterms,
+        variableNames: activeVariableNames,
+      });
+      return {
+        cellValues,
+        groupPatterns: result.selectedPrimeImplicants.map((implicant) => implicant.pattern),
+        error: null,
+      };
+    } catch (cause) {
+      return {
+        cellValues: {},
+        groupPatterns: [],
+        error: cause instanceof Error ? cause.message : 'Unable to map these minterms.',
+      };
+    }
+  }, [activeVariableNames, dontCares, inputMode, values, variableCount]);
 
   return (
     <main className="min-h-[100dvh] bg-[#f5f2e9] text-[#263440]">
@@ -129,7 +201,7 @@ function App() {
 
               <div>
                 <label htmlFor="function-values" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
-                  Values
+                  {inputMode === 'Minterms' ? 'Minterms' : 'Values'}
                   <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
                 </label>
                 <input
@@ -137,7 +209,7 @@ function App() {
                   type="text"
                   value={values}
                   onChange={(event) => setValues(event.target.value)}
-                  placeholder={inputMode === 'Boolean Expression' ? 'Enter an expression' : 'Enter values'}
+                  placeholder={inputMode === 'Minterms' ? 'e.g. 0, 1, 4, 5' : inputMode === 'Boolean Expression' ? 'Enter an expression' : 'Enter values'}
                   autoComplete="off"
                   className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
                   data-testid="input-values"
@@ -154,16 +226,21 @@ function App() {
                   type="text"
                   value={dontCares}
                   onChange={(event) => setDontCares(event.target.value)}
-                  placeholder="Enter don't-care terms"
+                  placeholder="e.g. 3, 6, 7"
                   autoComplete="off"
                   className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
                   data-testid="input-dont-cares"
                 />
               </div>
+              {mapDisplayData.error && (
+                <p className="text-[11px] leading-5 text-[#a43f39]" role="alert" data-testid="status-kmap-input-error">
+                  {mapDisplayData.error}
+                </p>
+              )}
             </div>
           </section>
 
-          <section className="stagger-enter flex min-h-[400px] flex-col rounded-2xl border border-[#e3dfd4] bg-[#fbfaf5] p-5 shadow-[0_10px_35px_rgba(53,61,55,0.035)] sm:min-h-[540px] sm:p-6" aria-labelledby="workspace-title">
+          <section className="stagger-enter flex min-h-[400px] flex-col p-5 sm:min-h-[540px] sm:p-6" aria-labelledby="workspace-title">
             <div className="flex items-start justify-between">
               <div>
                 <p className="mono mb-1 text-[10px] uppercase tracking-[0.14em] text-[#89918c]">Canvas</p>
@@ -173,9 +250,14 @@ function App() {
                 {variableCount === 5 ? '2 MAPS' : `${variableCount} VARIABLES`}
               </div>
             </div>
-            <div className="mt-5 flex flex-1 items-center justify-center overflow-auto rounded-xl border border-[#d9d8cd] bg-white p-4 sm:p-6" data-testid="panel-kmap-workspace">
+            <div className="mt-5 flex flex-1 items-center justify-center overflow-auto px-1 py-4 sm:px-2" data-testid="panel-kmap-workspace">
               <div className="w-full">
-                <KMapGrid variableCount={variableCount} variableNames={activeVariableNames} />
+                <KMapGrid
+                  variableCount={variableCount}
+                  variableNames={activeVariableNames}
+                  cellValues={mapDisplayData.cellValues}
+                  groupPatterns={mapDisplayData.groupPatterns}
+                />
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between gap-3 text-[10px] text-[#9a9e97]">

@@ -1,14 +1,35 @@
 type KMapGridProps = {
   variableCount: number;
   variableNames: string[];
+  cellValues: Record<number, '1' | 'X'>;
+  groupPatterns: string[];
 };
 
 type MapPanelConfig = {
   key: string;
-  rowVariables: string[];
-  columnVariables: string[];
+  rowVariableIndexes: number[];
+  columnVariableIndexes: number[];
   fixedBits: string;
   fixedLabel?: string;
+};
+
+type CellCoordinate = {
+  minterm: number;
+  row: number;
+  column: number;
+};
+
+type Segment = {
+  start: number;
+  end: number;
+};
+
+type GroupLoop = {
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 const GRAY_CODE_VALUES: Record<number, number[]> = {
@@ -20,12 +41,12 @@ function toBits(value: number, width: number) {
   return value.toString(2).padStart(width, '0');
 }
 
-function getMapPanels(variableCount: number, variableNames: string[]): MapPanelConfig[] {
+function getMapPanels(variableCount: number): MapPanelConfig[] {
   if (variableCount === 2) {
     return [{
       key: 'map',
-      rowVariables: variableNames.slice(0, 1),
-      columnVariables: variableNames.slice(1, 2),
+      rowVariableIndexes: [0],
+      columnVariableIndexes: [1],
       fixedBits: '',
     }];
   }
@@ -33,8 +54,8 @@ function getMapPanels(variableCount: number, variableNames: string[]): MapPanelC
   if (variableCount === 3) {
     return [{
       key: 'map',
-      rowVariables: variableNames.slice(0, 1),
-      columnVariables: variableNames.slice(1, 3),
+      rowVariableIndexes: [0],
+      columnVariableIndexes: [1, 2],
       fixedBits: '',
     }];
   }
@@ -42,124 +63,348 @@ function getMapPanels(variableCount: number, variableNames: string[]): MapPanelC
   if (variableCount === 4) {
     return [{
       key: 'map',
-      rowVariables: variableNames.slice(0, 2),
-      columnVariables: variableNames.slice(2, 4),
+      rowVariableIndexes: [0, 1],
+      columnVariableIndexes: [2, 3],
       fixedBits: '',
     }];
   }
 
   return [0, 1].map((fixedValue) => ({
     key: `map-${fixedValue}`,
-    rowVariables: variableNames.slice(1, 3),
-    columnVariables: variableNames.slice(3, 5),
+    rowVariableIndexes: [1, 2],
+    columnVariableIndexes: [3, 4],
     fixedBits: String(fixedValue),
-    fixedLabel: `${variableNames[0]} = ${fixedValue}`,
+    fixedLabel: String(fixedValue),
   }));
 }
 
-function MapPanel({ panel, variableCount }: { panel: MapPanelConfig; variableCount: number }) {
-  const rowWidth = panel.rowVariables.length;
-  const columnWidth = panel.columnVariables.length;
-  const rowCodes = GRAY_CODE_VALUES[rowWidth];
-  const columnCodes = GRAY_CODE_VALUES[columnWidth];
+function getContiguousSegments(indices: number[]): Segment[] {
+  const sorted = [...new Set(indices)].sort((left, right) => left - right);
+  const segments: Segment[] = [];
+
+  for (const index of sorted) {
+    const previous = segments[segments.length - 1];
+    if (previous && index === previous.end + 1) {
+      previous.end = index;
+    } else {
+      segments.push({ start: index, end: index });
+    }
+  }
+
+  return segments;
+}
+
+function patternCoversMinterm(pattern: string, minterm: number, variableCount: number): boolean {
+  const bits = toBits(minterm, variableCount);
+  return [...pattern].every((bit, index) => bit === '-' || bit === bits[index]);
+}
+
+function getGroupLoops(
+  patterns: string[],
+  cells: CellCoordinate[],
+  rowCount: number,
+  columnCount: number,
+  variableCount: number,
+): GroupLoop[] {
+  const loops: GroupLoop[] = [];
+
+  patterns.forEach((pattern, patternIndex) => {
+    const coveredCells = cells.filter((cell) =>
+      patternCoversMinterm(pattern, cell.minterm, variableCount),
+    );
+    const rows = getContiguousSegments(coveredCells.map((cell) => cell.row));
+    const columns = getContiguousSegments(coveredCells.map((cell) => cell.column));
+
+    rows.forEach((row) => {
+      columns.forEach((column) => {
+        loops.push({
+          key: `${patternIndex}-${row.start}-${column.start}`,
+          x: column.start * 100 + 2,
+          y: row.start * 100 + 2,
+          width: (column.end - column.start + 1) * 100 - 4,
+          height: (row.end - row.start + 1) * 100 - 4,
+        });
+      });
+    });
+  });
+
+  if (rowCount === 0 || columnCount === 0) {
+    return [];
+  }
+  return loops;
+}
+
+function HorizontalBracket({ label, position }: { label: string; position: 'top' | 'bottom' }) {
+  const top = position === 'top';
 
   return (
-    <section className="min-w-0" aria-label={panel.fixedLabel ?? `${variableCount}-variable map`}>
+    <div className="relative h-full min-w-0" aria-hidden="true">
+      <span className={`absolute inset-x-0 z-10 text-center font-mono text-[9px] leading-none text-[#b0b0b0] ${top ? 'top-0' : 'bottom-0'}`}>
+        {label}
+      </span>
+      <svg
+        className={`absolute inset-x-1 h-[7px] w-[calc(100%-8px)] text-[#c8c8c8] ${top ? 'bottom-0' : 'top-0'}`}
+        viewBox="0 0 100 8"
+        preserveAspectRatio="none"
+      >
+        <path
+          d={top ? 'M1 7V3H99V7' : 'M1 1V5H99V1'}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function RowBracket({ label }: { label: string }) {
+  return (
+    <div className="relative h-full" aria-hidden="true">
+      <span className="absolute left-0 top-1/2 -translate-y-1/2 font-mono text-[9px] leading-none text-[#b0b0b0]">
+        {label}
+      </span>
+      <svg className="absolute right-0 top-0 h-full w-[11px] text-[#c8c8c8]" viewBox="0 0 11 100" preserveAspectRatio="none">
+        <path d="M10 1H4V99H10" fill="none" stroke="currentColor" strokeWidth="1" />
+      </svg>
+    </div>
+  );
+}
+
+function MapPanel({
+  panel,
+  variableCount,
+  variableNames,
+  cellValues,
+  groupPatterns,
+}: {
+  panel: MapPanelConfig;
+  variableCount: number;
+  variableNames: string[];
+  cellValues: Record<number, '1' | 'X'>;
+  groupPatterns: string[];
+}) {
+  const rowWidth = panel.rowVariableIndexes.length;
+  const columnWidth = panel.columnVariableIndexes.length;
+  const rowCodes = GRAY_CODE_VALUES[rowWidth];
+  const columnCodes = GRAY_CODE_VALUES[columnWidth];
+  const rowVariables = panel.rowVariableIndexes.map((index) => variableNames[index]);
+  const columnVariables = panel.columnVariableIndexes.map((index) => variableNames[index]);
+  const cells: CellCoordinate[] = rowCodes.flatMap((rowCode, row) => {
+    const rowBits = toBits(rowCode, rowWidth);
+    return columnCodes.map((columnCode, column) => {
+      const columnBits = toBits(columnCode, columnWidth);
+      return {
+        minterm: Number.parseInt(`${panel.fixedBits}${rowBits}${columnBits}`, 2),
+        row,
+        column,
+      };
+    });
+  });
+  const groupLoops = getGroupLoops(
+    groupPatterns,
+    cells,
+    rowCodes.length,
+    columnCodes.length,
+    variableCount,
+  );
+  const isThreeVariableMap = variableCount === 3;
+  const topBracketColumns = isThreeVariableMap
+    ? columnCodes.map((code, index) => ({ index, bits: toBits(code, columnWidth) }))
+        .filter(({ bits }) => bits[0] === '1')
+        .map(({ index }) => index)
+    : [];
+  const bottomBracketColumns = isThreeVariableMap
+    ? columnCodes.map((code, index) => ({ index, bits: toBits(code, columnWidth) }))
+        .filter(({ bits }) => bits[1] === '1')
+        .map(({ index }) => index)
+    : [];
+  const rowBracketIndex = isThreeVariableMap
+    ? rowCodes.findIndex((code) => toBits(code, rowWidth) === '1')
+    : -1;
+  const topBracketSegments = getContiguousSegments(topBracketColumns);
+  const bottomBracketSegments = getContiguousSegments(bottomBracketColumns);
+  const mapWidth = variableCount === 2
+    ? 'min-w-[190px] max-w-[190px]'
+    : 'min-w-[300px] max-w-[340px]';
+  const layoutColumns = `28px 28px repeat(${columnCodes.length}, minmax(0, 1fr))`;
+  const layoutRows = `18px 24px repeat(${rowCodes.length}, 58px) 20px`;
+  const cellColumnStart = 3;
+  const cellRowStart = 3;
+  const cornerRowBits = rowVariables.join('');
+  const cornerColumnBits = columnVariables.join('');
+
+  return (
+    <section className="min-w-0" aria-label={panel.fixedLabel ? `${variableNames[0]} = ${panel.fixedLabel}` : `${variableCount}-variable map`}>
       {panel.fixedLabel && (
-        <h3 className="mb-2 text-center font-mono text-[11px] font-medium text-black" data-testid={`text-map-section-${panel.key}`}>
-          {panel.fixedLabel}
+        <h3 className="mb-1 text-center font-mono text-[10px] font-medium text-[#686868]" data-testid={`text-map-section-${panel.key}`}>
+          {variableNames[0]} = {panel.fixedLabel}
         </h3>
       )}
-      <div className="overflow-x-auto">
-        <table
-          className="w-full min-w-[300px] table-fixed border-collapse border border-black bg-white text-black"
-          aria-label={`${panel.fixedLabel ? `${panel.fixedLabel}, ` : ''}${variableCount}-variable Karnaugh map`}
-          data-testid={`table-kmap-${panel.key}`}
-        >
-          <colgroup>
-            <col style={{ width: '76px' }} />
-            {columnCodes.map((code) => <col key={code} />)}
-          </colgroup>
-          <thead>
-            <tr>
-              <th
-                scope="col"
-                className="relative h-12 border border-black p-0"
-                style={{
-                  backgroundImage: 'linear-gradient(to bottom right, transparent calc(50% - 0.6px), #111 50%, transparent calc(50% + 0.6px))',
-                }}
-                data-testid={`cell-kmap-corner-${panel.key}`}
+      <div className={`mx-auto w-full ${mapWidth}`}>
+        <div className="grid w-full text-black" style={{ gridTemplateColumns: layoutColumns, gridTemplateRows: layoutRows }}>
+          <div
+            className="relative"
+            style={{ gridColumn: '1 / span 2', gridRow: '1 / span 2' }}
+            data-testid={`cell-kmap-corner-${panel.key}`}
+          >
+            <span className="absolute right-0 top-0 font-mono text-[11px] leading-none text-black">
+              {cornerColumnBits}
+            </span>
+            <span className="absolute bottom-0 left-0 font-mono text-[11px] leading-none text-black">
+              {cornerRowBits}
+            </span>
+            <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 56 42" preserveAspectRatio="none" aria-hidden="true">
+              <line x1="26" y1="12" x2="56" y2="42" stroke="#111111" strokeWidth="1" />
+            </svg>
+            <span className="sr-only">{cornerRowBits} \ {cornerColumnBits}</span>
+          </div>
+
+          {isThreeVariableMap && topBracketSegments.map((segment) => (
+            <div
+              key={`top-${segment.start}`}
+              style={{
+                gridRow: 1,
+                gridColumn: `${cellColumnStart + segment.start} / span ${segment.end - segment.start + 1}`,
+              }}
+            >
+              <HorizontalBracket label={columnVariables[0]} position="top" />
+            </div>
+          ))}
+
+          {columnCodes.map((code, index) => (
+            <div
+              key={code}
+              className="flex items-end justify-center pb-0.5 font-mono text-[10px] leading-none text-[#333]"
+              style={{ gridRow: 2, gridColumn: cellColumnStart + index }}
+              data-testid={`text-kmap-column-${panel.key}-${toBits(code, columnWidth)}`}
+            >
+              {toBits(code, columnWidth)}
+            </div>
+          ))}
+
+          {rowCodes.map((code, rowIndex) => (
+            <div
+              key={code}
+              className="flex items-center justify-center font-mono text-[10px] leading-none text-[#333]"
+              style={{ gridRow: cellRowStart + rowIndex, gridColumn: 2 }}
+              data-testid={`text-kmap-row-${panel.key}-${toBits(code, rowWidth)}`}
+            >
+              {toBits(code, rowWidth)}
+            </div>
+          ))}
+
+          {isThreeVariableMap && rowBracketIndex >= 0 && (
+            <div
+              style={{ gridRow: cellRowStart + rowBracketIndex, gridColumn: 1 }}
+              data-testid={`bracket-kmap-row-${panel.key}`}
+            >
+              <RowBracket label={rowVariables[0]} />
+            </div>
+          )}
+
+          <div
+            className="relative grid overflow-visible"
+            role="grid"
+            aria-label={`${panel.fixedLabel ? `${variableNames[0]} = ${panel.fixedLabel}, ` : ''}${variableCount}-variable Karnaugh map`}
+            style={{
+              gridRow: `${cellRowStart} / span ${rowCodes.length}`,
+              gridColumn: `${cellColumnStart} / span ${columnCodes.length}`,
+              gridTemplateColumns: `repeat(${columnCodes.length}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${rowCodes.length}, 58px)`,
+              gap: '1px',
+              border: '1px solid #111111',
+              padding: '1px',
+              backgroundColor: '#111111',
+            }}
+            data-testid={`grid-kmap-${panel.key}`}
+          >
+            {cells.map(({ minterm, row, column }) => (
+              <div
+                key={minterm}
+                className="relative z-0 flex items-center justify-center bg-white"
+                role="gridcell"
+                aria-label={`Minterm ${minterm}${cellValues[minterm] ? `, value ${cellValues[minterm]}` : ''}`}
+                data-testid={`cell-kmap-${panel.key}-${minterm}`}
               >
-                <span className="absolute right-1.5 top-1 bg-white px-1 font-mono text-[9px] font-medium leading-3">
-                  {panel.columnVariables.join('')}
-                </span>
-                <span className="absolute bottom-1 left-1 bg-white px-1 font-mono text-[9px] font-medium leading-3">
-                  {panel.rowVariables.join('')}
-                </span>
-                <span className="sr-only">{panel.rowVariables.join('')} / {panel.columnVariables.join('')}</span>
-              </th>
-              {columnCodes.map((code) => (
-                <th
-                  key={code}
-                  scope="col"
-                  className="h-12 border border-black px-1 text-center font-mono text-[10px] font-normal"
-                  data-testid={`text-kmap-column-${panel.key}-${toBits(code, columnWidth)}`}
+                <span
+                  className="absolute left-1 top-1 z-30 font-mono text-[9px] italic leading-none text-[#b8b8b8]"
+                  data-testid={`text-kmap-index-${panel.key}-${minterm}`}
                 >
-                  {toBits(code, columnWidth)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rowCodes.map((rowCode) => {
-              const rowBits = toBits(rowCode, rowWidth);
-              return (
-                <tr key={rowCode}>
-                  <th
-                    scope="row"
-                    className="h-[68px] border border-black px-1 text-center font-mono text-[10px] font-normal"
-                    data-testid={`text-kmap-row-${panel.key}-${rowBits}`}
+                  {minterm}
+                </span>
+                {cellValues[minterm] && (
+                  <span
+                    className={`relative z-30 font-sans text-[36px] font-bold leading-none ${cellValues[minterm] === 'X' ? 'text-[#606060]' : 'text-black'}`}
+                    data-testid={`text-kmap-value-${panel.key}-${minterm}`}
                   >
-                    {rowBits}
-                  </th>
-                  {columnCodes.map((columnCode) => {
-                    const columnBits = toBits(columnCode, columnWidth);
-                    const decimalIndex = Number.parseInt(`${panel.fixedBits}${rowBits}${columnBits}`, 2);
-                    return (
-                      <td
-                        key={columnCode}
-                        className="relative h-[68px] border border-black bg-white"
-                        data-testid={`cell-kmap-${panel.key}-${rowBits}-${columnBits}`}
-                      >
-                        <span
-                          className="absolute left-1 top-1 font-mono text-[9px] font-normal text-gray-400"
-                          data-testid={`text-kmap-index-${panel.key}-${decimalIndex}`}
-                        >
-                          {decimalIndex}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    {cellValues[minterm]}
+                  </span>
+                )}
+                <span className="sr-only">Row {row + 1}, column {column + 1}</span>
+              </div>
+            ))}
+            <svg
+              className="pointer-events-none absolute inset-[2px] z-20 h-[calc(100%-4px)] w-[calc(100%-4px)]"
+              viewBox={`0 0 ${columnCodes.length * 100} ${rowCodes.length * 100}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              data-testid={`overlay-kmap-groups-${panel.key}`}
+            >
+              {groupLoops.map((loop) => (
+                <rect
+                  key={loop.key}
+                  x={loop.x}
+                  y={loop.y}
+                  width={loop.width}
+                  height={loop.height}
+                  rx="15"
+                  fill="none"
+                  stroke="#3159e8"
+                  strokeWidth="2"
+                  vectorEffect="non-scaling-stroke"
+                  data-testid={`outline-kmap-group-${panel.key}-${loop.key}`}
+                />
+              ))}
+            </svg>
+          </div>
+
+          {isThreeVariableMap && bottomBracketSegments.map((segment) => (
+            <div
+              key={`bottom-${segment.start}`}
+              style={{
+                gridRow: cellRowStart + rowCodes.length,
+                gridColumn: `${cellColumnStart + segment.start} / span ${segment.end - segment.start + 1}`,
+              }}
+            >
+              <HorizontalBracket label={columnVariables[1]} position="bottom" />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-export function KMapGrid({ variableCount, variableNames }: KMapGridProps) {
-  const panels = getMapPanels(variableCount, variableNames);
+export function KMapGrid({
+  variableCount,
+  variableNames,
+  cellValues,
+  groupPatterns,
+}: KMapGridProps) {
+  const panels = getMapPanels(variableCount);
 
   return (
-    <div
-      className={`grid gap-6 ${panels.length > 1 ? 'grid-cols-1 min-[1250px]:grid-cols-2' : 'grid-cols-1'}`}
-      data-testid="kmap-grid"
-    >
+    <div className={`grid gap-8 ${panels.length > 1 ? 'grid-cols-1 2xl:grid-cols-2' : 'grid-cols-1'}`} data-testid="kmap-grid">
       {panels.map((panel) => (
-        <MapPanel key={panel.key} panel={panel} variableCount={variableCount} />
+        <MapPanel
+          key={panel.key}
+          panel={panel}
+          variableCount={variableCount}
+          variableNames={variableNames}
+          cellValues={cellValues}
+          groupPatterns={groupPatterns}
+        />
       ))}
     </div>
   );
