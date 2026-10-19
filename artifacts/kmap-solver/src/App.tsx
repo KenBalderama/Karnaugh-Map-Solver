@@ -1,0 +1,205 @@
+import { useState } from 'react';
+import { Braces, ChevronDown, CircleHelp, Command, Dot, Sigma } from 'lucide-react';
+
+const INPUT_MODES = ['Truth Table', 'Minterms', 'Maxterms', 'Boolean Expression'] as const;
+
+function App() {
+  const [variableCount, setVariableCount] = useState(4);
+  const [variableNames, setVariableNames] = useState(['A', 'B', 'C', 'D', 'E']);
+  const [inputMode, setInputMode] = useState<(typeof INPUT_MODES)[number]>('Minterms');
+  const [values, setValues] = useState('');
+  const [dontCares, setDontCares] = useState('');
+
+  function updateVariableName(index: number, value: string) {
+    setVariableNames((current) => current.map((name, i) => i === index ? value : name));
+  }
+
+  return (
+    <main className="min-h-[100dvh] bg-[#f5f2e9] text-[#263440]">
+      <header className="border-b border-[#e3dfd4] bg-[#f8f6ef]">
+        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
+          <a href="/" aria-label="K-map Studio home" className="flex items-center gap-3" data-testid="link-home">
+            <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#286c65] text-[#f8f6ef]">
+              <Sigma size={20} strokeWidth={2.1} aria-hidden="true" />
+            </span>
+            <span className="font-display text-[15px] font-extrabold tracking-[-0.045em]">K-map Studio</span>
+          </a>
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-[#78817f]" data-testid="status-workbench">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#d37a56]" />
+            Workbench
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-[1440px] px-5 pb-12 pt-9 sm:px-8 sm:pt-12 lg:px-12">
+        <section className="page-enter mb-8 flex flex-col justify-between gap-5 border-b border-[#e3dfd4] pb-7 sm:flex-row sm:items-end">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#39786f]">
+              <span className="mono text-[10px]">01</span>
+              <span className="h-px w-5 bg-[#9ab4aa]" />
+              Boolean workspace
+            </div>
+            <h1 className="font-display text-[34px] font-bold leading-[1.08] tracking-[-0.055em] text-[#253541] sm:text-[42px]">
+              Set up your function.
+            </h1>
+            <p className="mt-2 max-w-xl text-[14px] leading-6 text-[#6d7779]">
+              Define the variables and input format before laying out your map.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 self-start rounded-full border border-[#dfdbcf] bg-[#f1eee5] px-3 py-2 text-[11px] text-[#687371] sm:self-auto" data-testid="text-solver-scope">
+            <CircleHelp size={14} strokeWidth={1.8} aria-hidden="true" />
+            Setup only
+          </div>
+        </section>
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(340px,410px)_minmax(0,1fr)] lg:gap-6">
+          <section className="page-enter rounded-2xl border border-[#e3dfd4] bg-[#fbfaf5] p-5 shadow-[0_10px_35px_rgba(53,61,55,0.035)] sm:p-6" aria-labelledby="function-setup-title">
+            <div className="mb-6 flex items-start justify-between">
+              <div>
+                <p className="mono mb-1 text-[10px] uppercase tracking-[0.14em] text-[#89918c]">Configuration</p>
+                <h2 id="function-setup-title" className="font-display text-[19px] font-bold tracking-[-0.035em]">Function setup</h2>
+              </div>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#edf2ec] text-[#37776e]">
+                <Braces size={17} strokeWidth={1.8} aria-hidden="true" />
+              </span>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="variable-count" className="mb-2 block text-[12px] font-semibold text-[#4f5d60]">Number of variables</label>
+                <div className="relative">
+                  <select
+                    id="variable-count"
+                    value={variableCount}
+                    onChange={(event) => setVariableCount(Number(event.target.value))}
+                    className="h-11 w-full appearance-none rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 pr-10 text-[13px] text-[#293941] outline-none transition focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                    data-testid="select-variable-count"
+                  >
+                    {[2, 3, 4, 5].map((count) => <option key={count} value={count}>{count} variables</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[#798482]" size={16} aria-hidden="true" />
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-[#89918c]" data-testid="text-active-variable-count">
+                  Choose between 2 and 5 variables.
+                </p>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-baseline justify-between">
+                  <label className="text-[12px] font-semibold text-[#4f5d60]">Variable names</label>
+                  <span className="mono text-[10px] text-[#9a9e97]">{variableCount} active</span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {variableNames.slice(0, variableCount).map((name, index) => (
+                    <label className="min-w-0" key={index}>
+                      <span className="sr-only">Variable {index + 1} name</span>
+                      <input
+                        aria-label={`Variable ${index + 1} name`}
+                        value={name}
+                        onChange={(event) => updateVariableName(index, event.target.value)}
+                        maxLength={12}
+                        className="h-10 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-2 text-center text-[13px] font-semibold text-[#2e4a4a] outline-none transition placeholder:text-[#adb2aa] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                        data-testid={`input-variable-name-${index + 1}`}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-[#89918c]" data-testid="text-active-variable-names">
+                  Active: {variableNames.slice(0, variableCount).map((name) => name || '—').join(', ')}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="input-mode" className="mb-2 block text-[12px] font-semibold text-[#4f5d60]">Input mode</label>
+                <div className="relative">
+                  <select
+                    id="input-mode"
+                    value={inputMode}
+                    onChange={(event) => setInputMode(event.target.value as (typeof INPUT_MODES)[number])}
+                    className="h-11 w-full appearance-none rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 pr-10 text-[13px] text-[#293941] outline-none transition focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                    data-testid="select-input-mode"
+                  >
+                    {INPUT_MODES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[#798482]" size={16} aria-hidden="true" />
+                </div>
+              </div>
+
+              <div className="h-px bg-[#eae6dc]" />
+
+              <div>
+                <label htmlFor="function-values" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
+                  Values
+                  <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
+                </label>
+                <input
+                  id="function-values"
+                  type="text"
+                  value={values}
+                  onChange={(event) => setValues(event.target.value)}
+                  placeholder={inputMode === 'Boolean Expression' ? 'Enter an expression' : 'Enter values'}
+                  autoComplete="off"
+                  className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                  data-testid="input-values"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="dont-cares" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
+                  Don&apos;t cares
+                  <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
+                </label>
+                <input
+                  id="dont-cares"
+                  type="text"
+                  value={dontCares}
+                  onChange={(event) => setDontCares(event.target.value)}
+                  placeholder="Enter don't-care terms"
+                  autoComplete="off"
+                  className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                  data-testid="input-dont-cares"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="stagger-enter flex min-h-[400px] flex-col rounded-2xl border border-[#e3dfd4] bg-[#fbfaf5] p-5 shadow-[0_10px_35px_rgba(53,61,55,0.035)] sm:min-h-[540px] sm:p-6" aria-labelledby="workspace-title">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="mono mb-1 text-[10px] uppercase tracking-[0.14em] text-[#89918c]">Canvas</p>
+                <h2 id="workspace-title" className="font-display text-[19px] font-bold tracking-[-0.035em]">K-map workspace</h2>
+              </div>
+              <div className="mono rounded-md border border-[#e7e3d9] bg-[#f6f3eb] px-2.5 py-1.5 text-[10px] text-[#838b85]" data-testid="status-workspace-empty">EMPTY</div>
+            </div>
+            <div className="relative mt-5 flex flex-1 items-center justify-center overflow-hidden rounded-xl border border-dashed border-[#d9d8cd] bg-[#f7f5ee]" data-testid="panel-empty-workspace">
+              <div className="absolute inset-0 opacity-[0.34]" aria-hidden="true" style={{ backgroundImage: 'radial-gradient(#a9b5a9 0.7px, transparent 0.7px)', backgroundSize: '22px 22px' }} />
+              <div className="relative mx-5 max-w-[330px] text-center">
+                <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#d9e0d7] bg-[#fbfaf5] text-[#628d82]">
+                  <Command size={19} strokeWidth={1.6} aria-hidden="true" />
+                </div>
+                <h3 className="font-display text-[16px] font-bold tracking-[-0.025em] text-[#34464b]">Your workspace is clear</h3>
+                <p className="mx-auto mt-2 max-w-[280px] text-[12px] leading-5 text-[#828a84]">
+                  Your map will have a place here. No layout has been generated.
+                </p>
+              </div>
+              <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-[10px] text-[#9ba199]" data-testid="text-workspace-note">
+                <Dot size={16} className="text-[#cf8b6b]" aria-hidden="true" />
+                Preview area
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3 text-[10px] text-[#9a9e97]">
+              <span>Workspace preview</span>
+              <span className="mono">READY WHEN YOU ARE</span>
+            </div>
+          </section>
+        </div>
+        <footer className="mt-7 flex flex-col gap-2 border-t border-[#e3dfd4] pt-4 text-[10px] text-[#9a9e97] sm:flex-row sm:items-center sm:justify-between">
+          <span>Enter function details to prepare your workspace.</span>
+          <span className="mono tracking-[0.05em]">K-MAP STUDIO <span className="text-[#c6c4ba]">/</span> CONFIGURATION</span>
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+export default App;

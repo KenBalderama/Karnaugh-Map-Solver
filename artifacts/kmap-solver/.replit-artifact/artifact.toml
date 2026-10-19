@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Karnaugh Map Solver"
+description = "A focused React interface for configuring Boolean logic inputs, variable names, and input modes for a Karnaugh map solver."
+version = "1.0.0"
+id = "artifacts/kmap-solver"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18130
+
+[services.development]
+run = "pnpm --filter @workspace/kmap-solver run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/kmap-solver", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/kmap-solver/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18130"
+BASE_PATH = "/"
