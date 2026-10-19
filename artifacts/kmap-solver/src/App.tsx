@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Braces, ChevronDown, CircleHelp, Command, Dot, Sigma } from 'lucide-react';
+import { Braces, ChevronDown, CircleHelp, Dot, Sigma } from 'lucide-react';
+import { KMapGrid } from './components/KMapGrid';
 
 const INPUT_MODES = ['Truth Table', 'Minterms', 'Maxterms', 'Boolean Expression'] as const;
 const DEFAULT_VARIABLE_NAMES = ['A', 'B', 'C', 'D', 'E'];
@@ -168,27 +169,21 @@ function App() {
                 <p className="mono mb-1 text-[10px] uppercase tracking-[0.14em] text-[#89918c]">Canvas</p>
                 <h2 id="workspace-title" className="font-display text-[19px] font-bold tracking-[-0.035em]">K-map workspace</h2>
               </div>
-              <div className="mono rounded-md border border-[#e7e3d9] bg-[#f6f3eb] px-2.5 py-1.5 text-[10px] text-[#838b85]" data-testid="status-workspace-empty">EMPTY</div>
-            </div>
-            <div className="relative mt-5 flex flex-1 items-center justify-center overflow-hidden rounded-xl border border-dashed border-[#d9d8cd] bg-[#f7f5ee]" data-testid="panel-empty-workspace">
-              <div className="absolute inset-0 opacity-[0.34]" aria-hidden="true" style={{ backgroundImage: 'radial-gradient(#a9b5a9 0.7px, transparent 0.7px)', backgroundSize: '22px 22px' }} />
-              <div className="relative mx-5 max-w-[330px] text-center">
-                <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-[#d9e0d7] bg-[#fbfaf5] text-[#628d82]">
-                  <Command size={19} strokeWidth={1.6} aria-hidden="true" />
-                </div>
-                <h3 className="font-display text-[16px] font-bold tracking-[-0.025em] text-[#34464b]">Your workspace is clear</h3>
-                <p className="mx-auto mt-2 max-w-[280px] text-[12px] leading-5 text-[#828a84]">
-                  Your map will have a place here. No layout has been generated.
-                </p>
+              <div className="mono rounded-md border border-[#e7e3d9] bg-[#f6f3eb] px-2.5 py-1.5 text-[10px] text-[#838b85]" data-testid="status-kmap-layout">
+                {variableCount === 5 ? '2 MAPS' : `${variableCount} VARIABLES`}
               </div>
-              <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-[10px] text-[#9ba199]" data-testid="text-workspace-note">
-                <Dot size={16} className="text-[#cf8b6b]" aria-hidden="true" />
-                Preview area
+            </div>
+            <div className="mt-5 flex flex-1 items-center justify-center overflow-auto rounded-xl border border-[#d9d8cd] bg-white p-4 sm:p-6" data-testid="panel-kmap-workspace">
+              <div className="w-full">
+                <KMapGrid variableCount={variableCount} variableNames={activeVariableNames} />
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between gap-3 text-[10px] text-[#9a9e97]">
-              <span>Workspace preview</span>
-              <span className="mono">READY WHEN YOU ARE</span>
+              <span className="flex items-center gap-1.5" data-testid="text-kmap-index-note">
+                <Dot size={16} className="text-[#555]" aria-hidden="true" />
+                Decimal cell indices
+              </span>
+              <span className="mono">GRAY-CODE ORDER</span>
             </div>
           </section>
         </div>
