@@ -47,14 +47,14 @@ function App() {
 
   const mapDisplayData = useMemo(() => {
     if (inputMode !== 'Minterms') {
-      return { cellValues: {}, groupPatterns: [], error: null };
+      return { cellValues: {}, groupPatterns: [], expression: null, error: null };
     }
 
     const parsedMinterms = parseMintermList(values, 'Minterm');
     const parsedDontCares = parseMintermList(dontCares, 'Don’t-care');
     const error = parsedMinterms.error ?? parsedDontCares.error;
     if (error) {
-      return { cellValues: {}, groupPatterns: [], error };
+      return { cellValues: {}, groupPatterns: [], expression: null, error };
     }
 
     const cellValues: Record<number, '1' | 'X'> = {};
@@ -64,10 +64,6 @@ function App() {
     parsedDontCares.minterms.forEach((minterm) => {
       cellValues[minterm] = 'X';
     });
-
-    if (parsedMinterms.minterms.length === 0 && parsedDontCares.minterms.length === 0) {
-      return { cellValues, groupPatterns: [], error: null };
-    }
 
     try {
       const result = simplifyBooleanFunction({
@@ -79,12 +75,14 @@ function App() {
       return {
         cellValues,
         groupPatterns: result.essentialPrimeImplicants.map((implicant) => implicant.pattern),
+        expression: result.expression,
         error: null,
       };
     } catch (cause) {
       return {
         cellValues: {},
         groupPatterns: [],
+        expression: null,
         error: cause instanceof Error ? cause.message : 'Unable to map these minterms.',
       };
     }
@@ -260,6 +258,28 @@ function App() {
                 />
               </div>
             </div>
+            <section
+              className="mt-5 rounded-xl border border-[#e4e8f0] bg-white p-5 shadow-[0_4px_18px_rgba(37,53,65,0.045)] sm:p-6"
+              aria-labelledby="solution-title"
+              data-testid="card-solution"
+            >
+              <h3 id="solution-title" className="font-display text-[17px] font-bold tracking-[-0.025em] text-[#253541]">
+                Solution &amp; Simplification
+              </h3>
+              <p className="mt-4 text-[12px] font-medium text-[#66727a]">Minimized Function:</p>
+              <p
+                className={`mt-1 break-words font-display text-[21px] font-extrabold leading-relaxed tracking-[-0.025em] sm:text-[25px] ${mapDisplayData.expression === null ? 'text-[#9aa3ab]' : 'text-[#2563c8]'}`}
+                aria-live="polite"
+                data-testid="text-minimized-function"
+              >
+                {mapDisplayData.expression === null
+                  ? (inputMode === 'Minterms' ? 'Check inputs to calculate' : 'Available in Minterms mode')
+                  : `F(${activeVariableNames.join(', ')}) = ${mapDisplayData.expression}`}
+              </p>
+              <p className="mt-3 border-t border-[#edf0f4] pt-3 text-[11px] text-[#89939b]">
+                Simplified using Sum of Products (SOP).
+              </p>
+            </section>
             <div className="mt-4 flex items-center justify-between gap-3 text-[10px] text-[#9a9e97]">
               <span className="flex items-center gap-1.5" data-testid="text-kmap-index-note">
                 <Dot size={16} className="text-[#555]" aria-hidden="true" />
