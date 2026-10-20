@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Braces, ChevronDown, CircleHelp, Dot, Sigma } from 'lucide-react';
+import { FormatBooleanExpression, FormatVariableList } from './components/FormatVariable';
 import { KMapGrid } from './components/KMapGrid';
 import { simplifyBooleanFunctionForms } from './lib/boolean-simplifier';
 
@@ -214,7 +215,7 @@ function App() {
                 />
                 <p className="mt-1.5 text-[10px] text-[#9a9e97]">Separate names with commas.</p>
                 <p className="mt-2 text-[11px] text-[#89918c]" data-testid="text-active-variable-names">
-                  Active: {activeVariableNames.join(', ')}
+                  Active: <FormatVariableList names={activeVariableNames} />
                 </p>
               </div>
 
@@ -344,9 +345,14 @@ function App() {
                 aria-live="polite"
                 data-testid="text-minimized-function"
               >
-                {activeExpression === null
-                  ? (inputMode === 'Minterms' ? 'Check inputs to calculate' : 'Available in Minterms mode')
-                  : `F(${activeVariableNames.join(', ')}) = ${activeExpression}`}
+                {activeExpression === null ? (
+                  inputMode === 'Minterms' ? 'Check inputs to calculate' : 'Available in Minterms mode'
+                ) : (
+                  <>
+                    F(<FormatVariableList names={activeVariableNames} />) ={' '}
+                    <FormatBooleanExpression expression={activeExpression} />
+                  </>
+                )}
               </p>
               <p className="mt-3 border-t border-[#edf0f4] pt-3 text-[11px] text-[#89939b]">
                 Simplified using {activeForm === 'SOP' ? 'Sum of Products (SOP).' : 'Product of Sums (POS).'}

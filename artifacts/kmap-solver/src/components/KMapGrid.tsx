@@ -1,3 +1,5 @@
+import { FormatVariable } from './FormatVariable';
+
 type KMapGridProps = {
   variableCount: number;
   variableNames: string[];
@@ -301,14 +303,14 @@ function MapPanel({
   const layoutRows = `24px repeat(${rowCodes.length}, 58px)`;
   const cellColumnStart = 2;
   const cellRowStart = 2;
-  const cornerRowBits = rowVariables.join('');
-  const cornerColumnBits = columnVariables.join('');
+  const cornerRowBits = rowVariables.join(' ');
+  const cornerColumnBits = columnVariables.join(' ');
 
   return (
     <section className="min-w-0" aria-label={panel.fixedLabel ? `${variableNames[0]} = ${panel.fixedLabel}` : `${variableCount}-variable map`}>
       {panel.fixedLabel && (
         <h3 className="mb-1 text-center font-mono text-[10px] font-medium text-[#686868]" data-testid={`text-map-section-${panel.key}`}>
-          {variableNames[0]} = {panel.fixedLabel}
+          <FormatVariable name={variableNames[0]} /> = {panel.fixedLabel}
         </h3>
       )}
       <div className={`mx-auto w-full ${mapWidth}`}>
@@ -319,10 +321,14 @@ function MapPanel({
             data-testid={`cell-kmap-corner-${panel.key}`}
           >
             <span className="absolute right-0 top-0 font-mono text-[11px] leading-none text-black">
-              {cornerColumnBits}
+              {columnVariables.map((name, index) => (
+                <FormatVariable key={`${name}-${index}`} name={name} />
+              ))}
             </span>
             <span className="absolute bottom-0 left-0 font-mono text-[11px] leading-none text-black">
-              {cornerRowBits}
+              {rowVariables.map((name, index) => (
+                <FormatVariable key={`${name}-${index}`} name={name} />
+              ))}
             </span>
             <svg className="absolute inset-0 h-full w-full overflow-visible" viewBox="0 0 42 24" preserveAspectRatio="none" aria-hidden="true">
               <line x1="17" y1="1" x2="42" y2="24" stroke="#111111" strokeWidth="1" />

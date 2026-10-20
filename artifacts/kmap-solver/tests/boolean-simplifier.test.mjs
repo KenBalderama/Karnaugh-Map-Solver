@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { simplifyBooleanFunction, simplifyBooleanFunctionForms } from '../src/lib/boolean-simplifier.ts';
+import { splitVariableName } from '../src/lib/variable-format.ts';
 
 function patternCovers(pattern, minterm, variableCount) {
   const bits = minterm.toString(2).padStart(variableCount, '0');
@@ -50,6 +51,14 @@ function countBits(value) {
 function literalCost(implicants) {
   return implicants.reduce((total, implicant) => total + implicant.literalCount, 0);
 }
+
+test('splits trailing variable digits with or without an underscore for visual subscripts', () => {
+  assert.deepEqual(splitVariableName('x1'), { base: 'x', subscript: '1' });
+  assert.deepEqual(splitVariableName('x_12'), { base: 'x', subscript: '12' });
+  assert.deepEqual(splitVariableName('A_0'), { base: 'A', subscript: '0' });
+  assert.deepEqual(splitVariableName('A'), { base: 'A', subscript: null });
+  assert.deepEqual(splitVariableName('control_in'), { base: 'control_in', subscript: null });
+});
 
 test('simplifies a three-variable function and identifies its essential prime implicant', () => {
   const result = simplifyBooleanFunction({
