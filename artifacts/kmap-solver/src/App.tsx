@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Braces, ChevronDown, CircleHelp, Dot, Sigma } from 'lucide-react';
 import { FormatBooleanExpression, FormatVariableList } from './components/FormatVariable';
 import { KMapGrid } from './components/KMapGrid';
+import { TruthTable, type TruthTableOutput } from './components/TruthTable';
 import { simplifyBooleanFunctionForms } from './lib/boolean-simplifier';
 
 const INPUT_MODES = ['Truth Table', 'Minterms', 'Maxterms', 'Boolean Expression'] as const;
@@ -38,6 +39,9 @@ function App() {
   const [values, setValues] = useState('');
   const [dontCares, setDontCares] = useState('');
   const [activeForm, setActiveForm] = useState<'SOP' | 'POS'>('SOP');
+  const [truthTableOutputs, setTruthTableOutputs] = useState<TruthTableOutput[]>(
+    () => Array.from({ length: 1 << 5 }, () => '0'),
+  );
 
   const activeVariableNames = useMemo(() => {
     const parsedVariableNames = variableNamesInput.split(',').map((name) => name.trim());
@@ -47,8 +51,36 @@ function App() {
     );
   }, [variableCount, variableNamesInput]);
 
+  useEffect(() => {
+    if (inputMode !== 'Truth Table') {
+      return;
+    }
+
+    const activeOutputs = truthTableOutputs.slice(0, 1 << variableCount);
+    setValues(
+      activeOutputs.flatMap((output, index) => output === '1' ? [index] : []).join(', '),
+    );
+    setDontCares(
+      activeOutputs.flatMap((output, index) => output === 'X' ? [index] : []).join(', '),
+    );
+  }, [inputMode, truthTableOutputs, variableCount]);
+
+  const cycleTruthTableOutput = (rowIndex: number) => {
+    setTruthTableOutputs((currentOutputs) => {
+      const nextOutputs = [...currentOutputs];
+      const currentOutput = nextOutputs[rowIndex] ?? '0';
+      const nextOutput: Record<TruthTableOutput, TruthTableOutput> = {
+        '0': '1',
+        '1': 'X',
+        X: '0',
+      };
+      nextOutputs[rowIndex] = nextOutput[currentOutput];
+      return nextOutputs;
+    });
+  };
+
   const mapDisplayData = useMemo(() => {
-    if (inputMode !== 'Minterms') {
+    if (inputMode !== 'Minterms' && inputMode !== 'Truth Table') {
       return {
         sopCellValues: {},
         posCellValues: {},
@@ -60,8 +92,19 @@ function App() {
       };
     }
 
-    const parsedMinterms = parseMintermList(values, 'Minterm');
-    const parsedDontCares = parseMintermList(dontCares, 'Don’t-care');
+    const activeTruthTableOutputs = truthTableOutputs.slice(0, 1 << variableCount);
+    const parsedMinterms = inputMode === 'Truth Table'
+      ? {
+          minterms: activeTruthTableOutputs.flatMap((output, index) => output === '1' ? [index] : []),
+          error: null,
+        }
+      : parseMintermList(values, 'Minterm');
+    const parsedDontCares = inputMode === 'Truth Table'
+      ? {
+          minterms: activeTruthTableOutputs.flatMap((output, index) => output === 'X' ? [index] : []),
+          error: null,
+        }
+      : parseMintermList(dontCares, 'Don’t-care');
     const error = parsedMinterms.error ?? parsedDontCares.error;
     if (error) {
       return {
@@ -75,8 +118,13 @@ function App() {
       };
     }
 
-    const sopCellValues: Record<number, '1' | 'X'> = {};
+    const sopCellValues: Record<number, '0' | '1' | 'X'> = {};
     const posCellValues: Record<number, '0' | 'X'> = {};
+    if (inputMode === 'Truth Table') {
+      activeTruthTableOutputs.forEach((output, minterm) => {
+        sopCellValues[minterm] = output;
+      });
+    }
     parsedMinterms.minterms.forEach((minterm) => {
       sopCellValues[minterm] = '1';
     });
@@ -123,7 +171,7 @@ function App() {
         error: cause instanceof Error ? cause.message : 'Unable to map these minterms.',
       };
     }
-  }, [activeVariableNames, dontCares, inputMode, values, variableCount]);
+  }, [activeVariableNames, dontCares, inputMode, truthTableOutputs, values, variableCount]);
   const activeExpression = activeForm === 'SOP'
     ? mapDisplayData.sopExpression
     : mapDisplayData.posExpression;
@@ -235,41 +283,59 @@ function App() {
                 </div>
               </div>
 
-              <div className="h-px bg-[#eae6dc]" />
+              {inputMode === 'Truth Table' ? (
+                <div className="space-y-2" data-testid="panel-truth-table">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[12px] font-semibold text-[#4f5d60]">Truth Table</span>
+                    <span className="mono text-[10px] text-[#a0a39b]">{1 << variableCount} rows</span>
+                  </div>
+                  <TruthTable
+                    variableCount={variableCount}
+                    variableNames={activeVariableNames}
+                    outputs={truthTableOutputs}
+                    onCycleOutput={cycleTruthTableOutput}
+                  />
+                  <p className="text-[10px] leading-4 text-[#89918c]">Select an output to cycle through 0, 1, and X.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="h-px bg-[#eae6dc]" />
 
-              <div>
-                <label htmlFor="function-values" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
-                  {inputMode === 'Minterms' ? 'Minterms' : 'Values'}
-                  <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
-                </label>
-                <input
-                  id="function-values"
-                  type="text"
-                  value={values}
-                  onChange={(event) => setValues(event.target.value)}
-                  placeholder={inputMode === 'Minterms' ? 'e.g. 0, 1, 4, 5' : inputMode === 'Boolean Expression' ? 'Enter an expression' : 'Enter values'}
-                  autoComplete="off"
-                  className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
-                  data-testid="input-values"
-                />
-              </div>
+                  <div>
+                    <label htmlFor="function-values" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
+                      {inputMode === 'Minterms' ? 'Minterms' : 'Values'}
+                      <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
+                    </label>
+                    <input
+                      id="function-values"
+                      type="text"
+                      value={values}
+                      onChange={(event) => setValues(event.target.value)}
+                      placeholder={inputMode === 'Minterms' ? 'e.g. 0, 1, 4, 5' : inputMode === 'Boolean Expression' ? 'Enter an expression' : 'Enter values'}
+                      autoComplete="off"
+                      className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                      data-testid="input-values"
+                    />
+                  </div>
 
-              <div>
-                <label htmlFor="dont-cares" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
-                  Don&apos;t cares
-                  <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
-                </label>
-                <input
-                  id="dont-cares"
-                  type="text"
-                  value={dontCares}
-                  onChange={(event) => setDontCares(event.target.value)}
-                  placeholder="e.g. 3, 6, 7"
-                  autoComplete="off"
-                  className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
-                  data-testid="input-dont-cares"
-                />
-              </div>
+                  <div>
+                    <label htmlFor="dont-cares" className="mb-2 flex items-center justify-between text-[12px] font-semibold text-[#4f5d60]">
+                      Don&apos;t cares
+                      <span className="mono text-[10px] font-normal text-[#a0a39b]">optional</span>
+                    </label>
+                    <input
+                      id="dont-cares"
+                      type="text"
+                      value={dontCares}
+                      onChange={(event) => setDontCares(event.target.value)}
+                      placeholder="e.g. 3, 6, 7"
+                      autoComplete="off"
+                      className="h-11 w-full rounded-lg border border-[#dedbd1] bg-[#fffefb] px-3.5 text-[13px] text-[#293941] outline-none transition placeholder:text-[#a5aaa2] focus:border-[#43867d] focus:ring-2 focus:ring-[#43867d]/15"
+                      data-testid="input-dont-cares"
+                    />
+                  </div>
+                </>
+              )}
               {mapDisplayData.error && (
                 <p className="text-[11px] leading-5 text-[#a43f39]" role="alert" data-testid="status-kmap-input-error">
                   {mapDisplayData.error}
@@ -346,7 +412,9 @@ function App() {
                 data-testid="text-minimized-function"
               >
                 {activeExpression === null ? (
-                  inputMode === 'Minterms' ? 'Check inputs to calculate' : 'Available in Minterms mode'
+                  inputMode === 'Minterms' || inputMode === 'Truth Table'
+                    ? 'Check inputs to calculate'
+                    : 'Available for Minterms and Truth Table'
                 ) : (
                   <>
                     F(<FormatVariableList names={activeVariableNames} />) ={' '}
