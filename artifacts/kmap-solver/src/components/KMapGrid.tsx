@@ -26,6 +26,7 @@ type Segment = {
 
 type GroupLoop = {
   key: string;
+  color: string;
   x: number;
   y: number;
   width: number;
@@ -42,6 +43,26 @@ const GRAY_CODE_VALUES: Record<number, number[]> = {
   1: [0, 1],
   2: [0, 1, 3, 2],
 };
+
+const GROUP_LOOP_COLORS = [
+  '#2563eb',
+  '#dc2626',
+  '#059669',
+  '#7c3aed',
+  '#ea580c',
+  '#0891b2',
+  '#be185d',
+  '#4d7c0f',
+] as const;
+
+function getGroupLoopColor(index: number): string {
+  if (index < GROUP_LOOP_COLORS.length) {
+    return GROUP_LOOP_COLORS[index];
+  }
+
+  const hue = Math.round(((index - GROUP_LOOP_COLORS.length) * 137.508 + 23) % 360);
+  return `hsl(${hue} 76% 34%)`;
+}
 
 function toBits(value: number, width: number) {
   return value.toString(2).padStart(width, '0');
@@ -176,6 +197,7 @@ function getGroupLoops(
       columns.forEach((column) => {
         loops.push({
           key: `${patternIndex}-${row.start}-${column.start}`,
+          color: getGroupLoopColor(patternIndex),
           x: column.start * 100 + 2,
           y: row.start * 100 + 2,
           width: (column.end - column.start + 1) * 100 - 4,
@@ -195,6 +217,44 @@ function getGroupLoops(
     return [];
   }
   return loops;
+}
+
+function GroupLoopOutline({
+  loop,
+  stroke,
+  strokeWidth,
+  testId,
+}: {
+  loop: GroupLoop;
+  stroke: string;
+  strokeWidth: number;
+  testId?: string;
+}) {
+  const isOpenEnded = Object.values(loop.openEdges).some(Boolean);
+  const sharedProps = {
+    fill: 'none',
+    stroke,
+    strokeWidth,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    vectorEffect: 'non-scaling-stroke' as const,
+    'data-testid': testId,
+  };
+
+  if (isOpenEnded) {
+    return <path d={createOpenLoopPath(loop)} {...sharedProps} />;
+  }
+
+  return (
+    <rect
+      x={loop.x}
+      y={loop.y}
+      width={loop.width}
+      height={loop.height}
+      rx="15"
+      {...sharedProps}
+    />
+  );
 }
 
 function MapPanel({
@@ -340,40 +400,23 @@ function MapPanel({
               aria-hidden="true"
               data-testid={`overlay-kmap-groups-${panel.key}`}
             >
-              {groupLoops.map((loop) => {
-                const isOpenEnded = Object.values(loop.openEdges).some(Boolean);
-                if (isOpenEnded) {
-                  return (
-                    <path
-                      key={loop.key}
-                      d={createOpenLoopPath(loop)}
-                      fill="none"
-                      stroke="#21875a"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                      data-testid={`outline-kmap-group-${panel.key}-${loop.key}`}
-                    />
-                  );
-                }
-
-                return (
-                  <rect
-                    key={loop.key}
-                    x={loop.x}
-                    y={loop.y}
-                    width={loop.width}
-                    height={loop.height}
-                    rx="15"
-                    fill="none"
-                    stroke="#21875a"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                    data-testid={`outline-kmap-group-${panel.key}-${loop.key}`}
-                  />
-                );
-              })}
+              {groupLoops.map((loop) => (
+                <GroupLoopOutline
+                  key={`halo-${loop.key}`}
+                  loop={loop}
+                  stroke="#ffffff"
+                  strokeWidth={4}
+                />
+              ))}
+              {groupLoops.map((loop) => (
+                <GroupLoopOutline
+                  key={loop.key}
+                  loop={loop}
+                  stroke={loop.color}
+                  strokeWidth={2}
+                  testId={`outline-kmap-group-${panel.key}-${loop.key}`}
+                />
+              ))}
             </svg>
           </div>
         </div>
