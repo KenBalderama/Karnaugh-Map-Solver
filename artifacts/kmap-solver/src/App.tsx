@@ -177,8 +177,8 @@ function App() {
     : mapDisplayData.posExpression;
 
   return (
-    <main className="min-h-[100dvh] bg-[#f5f2e9] text-[#263440]">
-      <header className="border-b border-[#e3dfd4] bg-[#f8f6ef]">
+    <main className="min-h-[100dvh] bg-white text-[#263440]">
+      <header className="border-b border-[#e3dfd4] bg-white">
         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 sm:px-8 lg:px-12">
           <a href="/" aria-label="K-map Studio home" className="flex items-center gap-3" data-testid="link-home">
             <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#286c65] text-[#f8f6ef]">
