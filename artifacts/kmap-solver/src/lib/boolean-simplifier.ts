@@ -17,7 +17,7 @@ export type PrimeImplicant = {
 };
 
 export type BooleanSimplificationResult = {
-  /** The minimum sum-of-products expression, using the supplied variable names. */
+  /** The minimized expression, using the supplied variable names and requested form. */
   expression: string;
   /** All prime implicants that cover at least one required minterm. */
   primeImplicants: PrimeImplicant[];

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Braces, ChevronDown, CircleHelp, Dot, Sigma } from 'lucide-react';
 import { KMapGrid } from './components/KMapGrid';
-import { simplifyBooleanFunction } from './lib/boolean-simplifier';
+import { simplifyBooleanFunctionForms } from './lib/boolean-simplifier';
 
 const INPUT_MODES = ['Truth Table', 'Minterms', 'Maxterms', 'Boolean Expression'] as const;
 const DEFAULT_VARIABLE_NAMES = ['A', 'B', 'C', 'D', 'E'];
@@ -36,6 +36,7 @@ function App() {
   const [inputMode, setInputMode] = useState<(typeof INPUT_MODES)[number]>('Minterms');
   const [values, setValues] = useState('');
   const [dontCares, setDontCares] = useState('');
+  const [activeForm, setActiveForm] = useState<'SOP' | 'POS'>('SOP');
 
   const activeVariableNames = useMemo(() => {
     const parsedVariableNames = variableNamesInput.split(',').map((name) => name.trim());
@@ -47,46 +48,84 @@ function App() {
 
   const mapDisplayData = useMemo(() => {
     if (inputMode !== 'Minterms') {
-      return { cellValues: {}, groupPatterns: [], expression: null, error: null };
+      return {
+        sopCellValues: {},
+        posCellValues: {},
+        sopGroupPatterns: [],
+        posGroupPatterns: [],
+        sopExpression: null,
+        posExpression: null,
+        error: null,
+      };
     }
 
     const parsedMinterms = parseMintermList(values, 'Minterm');
     const parsedDontCares = parseMintermList(dontCares, 'Don’t-care');
     const error = parsedMinterms.error ?? parsedDontCares.error;
     if (error) {
-      return { cellValues: {}, groupPatterns: [], expression: null, error };
+      return {
+        sopCellValues: {},
+        posCellValues: {},
+        sopGroupPatterns: [],
+        posGroupPatterns: [],
+        sopExpression: null,
+        posExpression: null,
+        error,
+      };
     }
 
-    const cellValues: Record<number, '1' | 'X'> = {};
+    const sopCellValues: Record<number, '1' | 'X'> = {};
+    const posCellValues: Record<number, '0' | 'X'> = {};
     parsedMinterms.minterms.forEach((minterm) => {
-      cellValues[minterm] = '1';
+      sopCellValues[minterm] = '1';
     });
     parsedDontCares.minterms.forEach((minterm) => {
-      cellValues[minterm] = 'X';
+      sopCellValues[minterm] = 'X';
+      posCellValues[minterm] = 'X';
     });
 
     try {
-      const result = simplifyBooleanFunction({
+      const forms = simplifyBooleanFunctionForms({
         variableCount,
         minterms: parsedMinterms.minterms,
         dontCares: parsedDontCares.minterms,
         variableNames: activeVariableNames,
       });
+
+      const specifiedTerms = new Set([
+        ...parsedMinterms.minterms,
+        ...parsedDontCares.minterms,
+      ]);
+      for (let minterm = 0; minterm < 1 << variableCount; minterm += 1) {
+        if (!specifiedTerms.has(minterm)) {
+          posCellValues[minterm] = '0';
+        }
+      }
+
       return {
-        cellValues,
-        groupPatterns: result.essentialPrimeImplicants.map((implicant) => implicant.pattern),
-        expression: result.expression,
+        sopCellValues,
+        posCellValues,
+        sopGroupPatterns: forms.sop.selectedPrimeImplicants.map((implicant) => implicant.pattern),
+        posGroupPatterns: forms.pos.selectedPrimeImplicants.map((implicant) => implicant.pattern),
+        sopExpression: forms.sop.expression,
+        posExpression: forms.pos.expression,
         error: null,
       };
     } catch (cause) {
       return {
-        cellValues: {},
-        groupPatterns: [],
-        expression: null,
+        sopCellValues: {},
+        posCellValues: {},
+        sopGroupPatterns: [],
+        posGroupPatterns: [],
+        sopExpression: null,
+        posExpression: null,
         error: cause instanceof Error ? cause.message : 'Unable to map these minterms.',
       };
     }
   }, [activeVariableNames, dontCares, inputMode, values, variableCount]);
+  const activeExpression = activeForm === 'SOP'
+    ? mapDisplayData.sopExpression
+    : mapDisplayData.posExpression;
 
   return (
     <main className="min-h-[100dvh] bg-[#f5f2e9] text-[#263440]">
@@ -253,8 +292,8 @@ function App() {
                 <KMapGrid
                   variableCount={variableCount}
                   variableNames={activeVariableNames}
-                  cellValues={mapDisplayData.cellValues}
-                  groupPatterns={mapDisplayData.groupPatterns}
+                  cellValues={activeForm === 'SOP' ? mapDisplayData.sopCellValues : mapDisplayData.posCellValues}
+                  groupPatterns={activeForm === 'SOP' ? mapDisplayData.sopGroupPatterns : mapDisplayData.posGroupPatterns}
                 />
               </div>
             </div>
@@ -263,21 +302,54 @@ function App() {
               aria-labelledby="solution-title"
               data-testid="card-solution"
             >
-              <h3 id="solution-title" className="font-display text-[17px] font-bold tracking-[-0.025em] text-[#253541]">
-                Solution &amp; Simplification
-              </h3>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h3 id="solution-title" className="font-display text-[17px] font-bold tracking-[-0.025em] text-[#253541]">
+                  Solution &amp; Simplification
+                </h3>
+                <div
+                  className="inline-flex rounded-lg bg-[#f2f4f8] p-1"
+                  role="tablist"
+                  aria-label="Simplification form"
+                  data-testid="tabs-simplification-form"
+                >
+                  {(['SOP', 'POS'] as const).map((form) => (
+                    <button
+                      key={form}
+                      type="button"
+                      id={`tab-simplification-${form.toLowerCase()}`}
+                      role="tab"
+                      aria-selected={activeForm === form}
+                      aria-controls="solution-output"
+                      tabIndex={activeForm === form ? 0 : -1}
+                      onClick={() => setActiveForm(form)}
+                      className={`rounded-md px-4 py-1.5 text-[11px] font-bold transition-colors ${
+                        activeForm === form
+                          ? 'bg-white text-[#2563c8] shadow-sm'
+                          : 'text-[#8a939c] hover:text-[#53616b]'
+                      }`}
+                      data-testid={`tab-simplification-${form.toLowerCase()}`}
+                    >
+                      {form}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <p className="mt-4 text-[12px] font-medium text-[#66727a]">Minimized Function:</p>
               <p
-                className={`mt-1 break-words font-display text-[21px] font-extrabold leading-relaxed tracking-[-0.025em] sm:text-[25px] ${mapDisplayData.expression === null ? 'text-[#9aa3ab]' : 'text-[#2563c8]'}`}
+                id="solution-output"
+                role="tabpanel"
+                aria-labelledby={`tab-simplification-${activeForm.toLowerCase()}`}
+                tabIndex={0}
+                className={`mt-1 break-words font-display text-[21px] font-extrabold leading-relaxed tracking-[-0.025em] sm:text-[25px] ${activeExpression === null ? 'text-[#9aa3ab]' : 'text-[#2563c8]'}`}
                 aria-live="polite"
                 data-testid="text-minimized-function"
               >
-                {mapDisplayData.expression === null
+                {activeExpression === null
                   ? (inputMode === 'Minterms' ? 'Check inputs to calculate' : 'Available in Minterms mode')
-                  : `F(${activeVariableNames.join(', ')}) = ${mapDisplayData.expression}`}
+                  : `F(${activeVariableNames.join(', ')}) = ${activeExpression}`}
               </p>
               <p className="mt-3 border-t border-[#edf0f4] pt-3 text-[11px] text-[#89939b]">
-                Simplified using Sum of Products (SOP).
+                Simplified using {activeForm === 'SOP' ? 'Sum of Products (SOP).' : 'Product of Sums (POS).'}
               </p>
             </section>
             <div className="mt-4 flex items-center justify-between gap-3 text-[10px] text-[#9a9e97]">

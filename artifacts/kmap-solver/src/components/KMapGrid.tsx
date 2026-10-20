@@ -1,7 +1,7 @@
 type KMapGridProps = {
   variableCount: number;
   variableNames: string[];
-  cellValues: Record<number, '1' | 'X'>;
+  cellValues: Record<number, '0' | '1' | 'X'>;
   groupPatterns: string[];
 };
 
@@ -267,7 +267,7 @@ function MapPanel({
   panel: MapPanelConfig;
   variableCount: number;
   variableNames: string[];
-  cellValues: Record<number, '1' | 'X'>;
+  cellValues: Record<number, '0' | '1' | 'X'>;
   groupPatterns: string[];
 }) {
   const rowWidth = panel.rowVariableIndexes.length;
@@ -384,7 +384,9 @@ function MapPanel({
                 </span>
                 {cellValues[minterm] && (
                   <span
-                    className={`relative z-30 font-sans text-[36px] font-bold leading-none ${cellValues[minterm] === 'X' ? 'text-[#606060]' : 'text-black'}`}
+                    className={`relative z-30 font-sans text-[36px] font-bold leading-none ${
+                      cellValues[minterm] === 'X' ? 'text-[#606060]' : cellValues[minterm] === '0' ? 'text-[#263440]' : 'text-black'
+                    }`}
                     data-testid={`text-kmap-value-${panel.key}-${minterm}`}
                   >
                     {cellValues[minterm]}

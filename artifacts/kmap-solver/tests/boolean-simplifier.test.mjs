@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { simplifyBooleanFunction } from '../src/lib/boolean-simplifier.ts';
+import { simplifyBooleanFunction, simplifyBooleanFunctionForms } from '../src/lib/boolean-simplifier.ts';
 
 function patternCovers(pattern, minterm, variableCount) {
   const bits = minterm.toString(2).padStart(variableCount, '0');
@@ -14,6 +14,24 @@ function evaluateExpression(expression, variableNames, minterm, variableCount) {
   const bits = minterm.toString(2).padStart(variableCount, '0');
   return expression.split(' + ').some((term) =>
     term.split('·').every((literal) => {
+      const negated = literal.endsWith("'");
+      const name = negated ? literal.slice(0, -1) : literal;
+      const variableIndex = variableNames.indexOf(name);
+      assert.notEqual(variableIndex, -1, `Unexpected literal ${literal}`);
+      return negated ? bits[variableIndex] === '0' : bits[variableIndex] === '1';
+    }),
+  );
+}
+
+function evaluateProductOfSums(expression, variableNames, minterm, variableCount) {
+  if (expression === '0') return false;
+  if (expression === '1') return true;
+
+  const bits = minterm.toString(2).padStart(variableCount, '0');
+  const clauses = [...expression.matchAll(/\(([^()]*)\)/g)].map(([, clause]) => clause);
+  assert.ok(clauses.length > 0, `Expected parenthesized POS clauses in ${expression}`);
+  return clauses.every((clause) =>
+    clause.split(' + ').some((literal) => {
       const negated = literal.endsWith("'");
       const name = negated ? literal.slice(0, -1) : literal;
       const variableIndex = variableNames.indexOf(name);
@@ -121,6 +139,86 @@ test('returns the constant expressions for empty and full on-sets', () => {
     simplifyBooleanFunction({ variableCount: 3, minterms: [0, 1, 2, 3, 4, 5, 6, 7] }).expression,
     '1',
   );
+});
+
+test('formats POS clauses with complemented literals and custom names', () => {
+  const forms = simplifyBooleanFunctionForms({
+    variableCount: 2,
+    minterms: [3],
+    variableNames: ['x', 'y'],
+  });
+
+  assert.equal(forms.sop.expression, 'x·y');
+  assert.deepEqual(
+    [...forms.pos.expression.matchAll(/\(([^()]*)\)/g)].map(([, clause]) => clause).sort(),
+    ['x', 'y'],
+  );
+  assert.equal(
+    simplifyBooleanFunctionForms({ variableCount: 2, minterms: [] }).pos.expression,
+    '0',
+  );
+  assert.equal(
+    simplifyBooleanFunctionForms({ variableCount: 2, minterms: [0, 1, 2, 3] }).pos.expression,
+    '1',
+  );
+});
+
+test('POS matches every three-variable truth table and respects don’t-cares', () => {
+  const variableCount = 3;
+  const variableNames = ['x', 'y', 'z'];
+  const mintermLimit = 1 << variableCount;
+
+  for (let truthTable = 0; truthTable < (1 << mintermLimit); truthTable += 1) {
+    const minterms = Array.from({ length: mintermLimit }, (_, minterm) => minterm)
+      .filter((minterm) => (truthTable & (1 << minterm)) !== 0);
+    const { pos } = simplifyBooleanFunctionForms({ variableCount, minterms, variableNames });
+
+    for (let minterm = 0; minterm < mintermLimit; minterm += 1) {
+      assert.equal(
+        evaluateProductOfSums(pos.expression, variableNames, minterm, variableCount),
+        minterms.includes(minterm),
+        `Truth table ${truthTable}, minterm ${minterm}, POS ${pos.expression}`,
+      );
+    }
+  }
+
+  const withDontCares = simplifyBooleanFunctionForms({
+    variableCount,
+    minterms: [0, 1, 2, 3],
+    dontCares: [4],
+    variableNames,
+  });
+  for (const minterm of [0, 1, 2, 3, 5, 6, 7]) {
+    assert.equal(
+      evaluateProductOfSums(withDontCares.pos.expression, variableNames, minterm, variableCount),
+      minterm < 4,
+      `Minterm ${minterm}, POS ${withDontCares.pos.expression}`,
+    );
+  }
+});
+
+test('supports five-variable POS with custom names and don’t-cares', () => {
+  const variableCount = 5;
+  const variableNames = ['p', 'q', 'r', 's', 't'];
+  const dontCares = [0, 6];
+  const minterms = Array.from({ length: 1 << variableCount }, (_, minterm) => minterm)
+    .filter((minterm) => minterm % 2 === 1);
+  const { pos } = simplifyBooleanFunctionForms({
+    variableCount,
+    minterms,
+    dontCares,
+    variableNames,
+  });
+
+  assert.equal(pos.expression, '(t)');
+  for (let minterm = 0; minterm < 1 << variableCount; minterm += 1) {
+    if (dontCares.includes(minterm)) continue;
+    assert.equal(
+      evaluateProductOfSums(pos.expression, variableNames, minterm, variableCount),
+      minterm % 2 === 1,
+      `Minterm ${minterm}, POS ${pos.expression}`,
+    );
+  }
 });
 
 test('deduplicates repeated terms and validates term ranges and variable names', () => {
