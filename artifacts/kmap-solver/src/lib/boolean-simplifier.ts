@@ -27,6 +27,11 @@ export type BooleanSimplificationResult = {
   selectedPrimeImplicants: PrimeImplicant[];
 };
 
+export type BooleanFunctionForms = {
+  sop: BooleanSimplificationResult;
+  pos: BooleanSimplificationResult;
+};
+
 function normalizeTerms(terms: readonly number[], label: string, maxMinterm: number): number[] {
   if (!Array.isArray(terms)) {
     throw new TypeError(`${label} must be an array of integers.`);
@@ -317,5 +322,51 @@ export function simplifyBooleanFunction({
     primeImplicants,
     essentialPrimeImplicants,
     selectedPrimeImplicants,
+  };
+}
+
+function formatProductOfSums(
+  implicants: readonly PrimeImplicant[],
+  variableNames: readonly string[],
+): string {
+  if (implicants.length === 0) {
+    return '1';
+  }
+  if (implicants.some(({ pattern }) => [...pattern].every((bit) => bit === '-'))) {
+    return '0';
+  }
+
+  return implicants.map(({ pattern }) => {
+    const literals = [...pattern].flatMap((bit, index) => {
+      if (bit === '-') {
+        return [];
+      }
+      return [bit === '0' ? variableNames[index] : `${variableNames[index]}'`];
+    });
+    return `(${literals.join(' + ')})`;
+  }).join('');
+}
+
+/** Calculates minimum SOP and POS forms, using don't-cares for either cover. */
+export function simplifyBooleanFunctionForms(input: BooleanSimplifierInput): BooleanFunctionForms {
+  const sop = simplifyBooleanFunction(input);
+  const variableNames = normalizeVariableNames(input.variableNames, input.variableCount);
+  const dontCareSet = new Set(input.dontCares ?? []);
+  const mintermSet = new Set(input.minterms);
+  const zeroMinterms = Array.from(
+    { length: 1 << input.variableCount },
+    (_, minterm) => minterm,
+  ).filter((minterm) => !mintermSet.has(minterm) && !dontCareSet.has(minterm));
+  const zeroSetSimplification = simplifyBooleanFunction({
+    ...input,
+    minterms: zeroMinterms,
+  });
+
+  return {
+    sop,
+    pos: {
+      ...zeroSetSimplification,
+      expression: formatProductOfSums(zeroSetSimplification.selectedPrimeImplicants, variableNames),
+    },
   };
 }
